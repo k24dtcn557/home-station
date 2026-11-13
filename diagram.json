@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "author": "Hung Huynh",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32-2432s028r",
+      "id": "cyd",
+      "top": 0,
+      "left": 0,
+      "rotate": 180,
+      "attrs": {}
+    }
+  ],
+  "connections": [
+    [
+      "esp:TX",
+      "$serialMonitor:RX",
+      "",
+      []
+    ],
+    [
+      "esp:RX",
+      "$serialMonitor:TX",
+      "",
+      []
+    ]
+  ]
+}

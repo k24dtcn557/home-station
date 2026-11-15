@@ -5,6 +5,7 @@
 #include <HTTPClient.h>
 #include <math.h>
 #include <stdlib.h>
+#include <Wire.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 
@@ -15,10 +16,87 @@ namespace {
 
 constexpr uint32_t kWifiRetryIntervalMs = 10000;
 constexpr uint32_t kWeatherRefreshIntervalMs = 10 * 60 * 1000;
+constexpr uint32_t kDht12RefreshIntervalMs = 5000;
+constexpr uint32_t kDht12ResponseDelayMs = 50;
 constexpr size_t kMaxIconBytes = 8 * 1024;
+constexpr uint8_t kDht12Address = 0x5C;
+constexpr uint8_t kDht12SdaPin = 27;
+constexpr uint8_t kDht12SclPin = 22;
 
 uint32_t next_wifi_attempt = 0;
 uint32_t next_weather_refresh = 0;
+uint32_t next_dht12_refresh = 0;
+
+bool read_dht12(float* temperature_c, float* humidity_percent) {
+  Wire.beginTransmission(kDht12Address);
+  Wire.write(0);
+  const uint8_t transmission_status = Wire.endTransmission();
+  if (transmission_status != 0) {
+    Serial.printf(
+        "[DHT12] I2C transaction failed: %u\n",
+        transmission_status);
+    return false;
+  }
+
+  delay(kDht12ResponseDelayMs);
+  const uint8_t bytes_received =
+      Wire.requestFrom(kDht12Address, static_cast<uint8_t>(5));
+  if (bytes_received != 5) {
+    Serial.printf(
+        "[DHT12] Expected 5 bytes, received %u\n",
+        bytes_received);
+    return false;
+  }
+
+  uint8_t data[5];
+  for (uint8_t index = 0; index < 5; ++index) {
+    if (!Wire.available()) {
+      Serial.println("[DHT12] Data read interrupted");
+      return false;
+    }
+    data[index] = Wire.read();
+  }
+
+  if (static_cast<uint8_t>(data[0] + data[1] + data[2] + data[3]) !=
+      data[4]) {
+    Serial.println("[DHT12] Checksum failed");
+    return false;
+  }
+
+  const bool negative_temperature = (data[2] & 0x80) != 0;
+  const float temperature =
+      static_cast<float>(data[2] & 0x7F) + data[3] / 10.0F;
+  const float humidity = static_cast<float>(data[0]) + data[1] / 10.0F;
+  if (humidity > 100.0F || temperature > 80.0F) {
+    Serial.println("[DHT12] Reading out of range");
+    return false;
+  }
+
+  *temperature_c = negative_temperature ? -temperature : temperature;
+  *humidity_percent = humidity;
+  return true;
+}
+
+void update_dht12() {
+  if (millis() < next_dht12_refresh) {
+    return;
+  }
+  next_dht12_refresh = millis() + kDht12RefreshIntervalMs;
+
+  float temperature_c = 0.0F;
+  float humidity_percent = 0.0F;
+  if (!read_dht12(&temperature_c, &humidity_percent)) {
+    Serial.println("[DHT12] Read failed");
+    ui_set_sensor_status("DHT12 unavailable");
+    return;
+  }
+
+  Serial.printf(
+      "[DHT12] %.1f C, %.1f %%\n",
+      temperature_c,
+      humidity_percent);
+  ui_set_sensor(temperature_c, humidity_percent);
+}
 
 bool read_icon(WiFiClient* stream, uint8_t* buffer, size_t buffer_size, size_t* bytes_read) {
   *bytes_read = 0;
@@ -196,17 +274,31 @@ bool fetch_weather() {
 }  // namespace
 
 void weather_init() {
+  pinMode(kDht12SdaPin, INPUT_PULLUP);
+  pinMode(kDht12SclPin, INPUT_PULLUP);
+  Wire.begin(kDht12SdaPin, kDht12SclPin);
+  Wire.setClock(100000);
+  Serial.printf(
+      "[DHT12] I2C initialized SDA=%u SCL=%u, levels=%d/%d\n",
+      kDht12SdaPin,
+      kDht12SclPin,
+      digitalRead(kDht12SdaPin),
+      digitalRead(kDht12SclPin));
+  ui_set_sensor_status("DHT12 waiting...");
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.printf("[Weather] Connecting to Wi-Fi SSID: %s\n", WIFI_SSID);
   next_wifi_attempt = millis() + kWifiRetryIntervalMs;
   next_weather_refresh = millis() + 5000;
+  next_dht12_refresh = millis() + 1000;
   ui_set_weather_status("Connecting...");
   ui_set_system_status("Connecting Wi-Fi");
 }
 
 void weather_update() {
+  update_dht12();
+
   if (WiFi.status() != WL_CONNECTED) {
     ui_set_system_status("Wi-Fi disconnected");
     if (millis() < next_wifi_attempt) {

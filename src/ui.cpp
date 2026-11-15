@@ -16,6 +16,7 @@ lv_obj_t* weather_icon = nullptr;
 lv_obj_t* weather_icon_placeholder = nullptr;
 lv_obj_t* weather_temperature = nullptr;
 lv_obj_t* weather_condition = nullptr;
+lv_obj_t* sensor_reading = nullptr;
 lv_obj_t* system_status = nullptr;
 lv_img_dsc_t weather_icon_dsc;
 lv_color_t weather_icon_pixels[kWeatherIconSize * kWeatherIconSize];
@@ -167,6 +168,29 @@ void create_status_card(
   }
 }
 
+void create_compact_status_card(
+    lv_obj_t* page,
+    const char* value,
+    lv_coord_t y) {
+  lv_obj_t* card = create_card(page, y);
+  lv_obj_set_height(card, 44);
+
+  system_status = lv_label_create(card);
+  lv_label_set_text(system_status, value);
+  lv_obj_set_style_text_color(system_status, lv_color_hex(0x16A34A), 0);
+  lv_obj_center(system_status);
+}
+
+void create_sensor_card(lv_obj_t* page) {
+  lv_obj_t* card = create_card(page, 148);
+
+  sensor_reading = lv_label_create(card);
+  lv_label_set_text(sensor_reading, "DHT12: --.- C  --.- %");
+  lv_obj_set_style_text_font(sensor_reading, &lv_font_montserrat_20, 0);
+  lv_obj_set_style_text_color(sensor_reading, lv_color_hex(0x0F172A), 0);
+  lv_obj_center(sensor_reading);
+}
+
 void create_home_page(lv_obj_t* page) {
   style_page(page);
   create_page_header(page, "Home", "Your home at a glance");
@@ -207,8 +231,8 @@ void create_home_page(lv_obj_t* page) {
       weather_condition, lv_color_hex(0x64748B), 0);
   lv_obj_align(weather_condition, LV_ALIGN_BOTTOM_LEFT, 58, 0);
 
-  create_status_card(
-      page, "System status", "Ready", lv_color_hex(0x16A34A), 148);
+  create_sensor_card(page);
+  create_compact_status_card(page, "Ready", 196);
 }
 
 void create_wifi_page(lv_obj_t* page) {
@@ -245,6 +269,23 @@ void ui_set_weather_status(const char* status) {
 void ui_set_system_status(const char* status) {
   if (system_status != nullptr) {
     lv_label_set_text(system_status, status);
+  }
+}
+
+void ui_set_sensor_status(const char* status) {
+  if (sensor_reading != nullptr) {
+    lv_label_set_text(sensor_reading, status);
+  }
+}
+
+void ui_set_sensor(float temperature_c, float humidity_percent) {
+  if (sensor_reading != nullptr) {
+    String reading = "DHT12: ";
+    reading += String(temperature_c, 1);
+    reading += " C  ";
+    reading += String(humidity_percent, 1);
+    reading += " %";
+    lv_label_set_text(sensor_reading, reading.c_str());
   }
 }
 

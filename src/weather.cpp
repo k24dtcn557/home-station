@@ -1,328 +1,392 @@
-#include "weather.h"
+#include "app.h"
 
-#include <Arduino.h>
-#include <ArduinoJson.h>
-#include <HTTPClient.h>
-#include <math.h>
-#include <stdlib.h>
-#include <Wire.h>
-#include <WiFi.h>
-#include <WiFiClientSecure.h>
-
-#include "config.h"
-#include "ui.h"
-
-namespace {
-
-constexpr uint32_t kWifiRetryIntervalMs = 10000;
-constexpr uint32_t kWeatherRefreshIntervalMs = 10 * 60 * 1000;
-constexpr uint32_t kDht12RefreshIntervalMs = 5000;
-constexpr uint32_t kDht12ResponseDelayMs = 50;
-constexpr size_t kMaxIconBytes = 8 * 1024;
-constexpr uint8_t kDht12Address = 0x5C;
-constexpr uint8_t kDht12SdaPin = 27;
-constexpr uint8_t kDht12SclPin = 22;
-
-uint32_t next_wifi_attempt = 0;
-uint32_t next_weather_refresh = 0;
-uint32_t next_dht12_refresh = 0;
-
-bool read_dht12(float* temperature_c, float* humidity_percent) {
-  Wire.beginTransmission(kDht12Address);
-  Wire.write(0);
-  const uint8_t transmission_status = Wire.endTransmission();
-  if (transmission_status != 0) {
-    Serial.printf(
-        "[DHT12] I2C transaction failed: %u\n",
-        transmission_status);
-    return false;
-  }
-
-  delay(kDht12ResponseDelayMs);
-  const uint8_t bytes_received =
-      Wire.requestFrom(kDht12Address, static_cast<uint8_t>(5));
-  if (bytes_received != 5) {
-    Serial.printf(
-        "[DHT12] Expected 5 bytes, received %u\n",
-        bytes_received);
-    return false;
-  }
-
-  uint8_t data[5];
-  for (uint8_t index = 0; index < 5; ++index) {
-    if (!Wire.available()) {
-      Serial.println("[DHT12] Data read interrupted");
-      return false;
-    }
-    data[index] = Wire.read();
-  }
-
-  if (static_cast<uint8_t>(data[0] + data[1] + data[2] + data[3]) !=
-      data[4]) {
-    Serial.println("[DHT12] Checksum failed");
-    return false;
-  }
-
-  const bool negative_temperature = (data[2] & 0x80) != 0;
-  const float temperature =
-      static_cast<float>(data[2] & 0x7F) + data[3] / 10.0F;
-  const float humidity = static_cast<float>(data[0]) + data[1] / 10.0F;
-  if (humidity > 100.0F || temperature > 80.0F) {
-    Serial.println("[DHT12] Reading out of range");
-    return false;
-  }
-
-  *temperature_c = negative_temperature ? -temperature : temperature;
-  *humidity_percent = humidity;
-  return true;
+int day_of_week(int y, int m, int d) {
+  static const int t[] = { 0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4 };
+  if (m < 3) y -= 1;
+  return (y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7;
 }
 
-void update_dht12() {
-  if (millis() < next_dht12_refresh) {
-    return;
-  }
-  next_dht12_refresh = millis() + kDht12RefreshIntervalMs;
+String hour_of_day(int hour) {
+  const LocalizedStrings* strings = get_strings(current_language);
+  if(hour < 0 || hour > 23) return String(strings->invalid_hour);
 
-  float temperature_c = 0.0F;
-  float humidity_percent = 0.0F;
-  if (!read_dht12(&temperature_c, &humidity_percent)) {
-    Serial.println("[DHT12] Read failed");
-    ui_set_sensor_status("DHT12 unavailable");
-    return;
-  }
-
-  Serial.printf(
-      "[DHT12] %.1f C, %.1f %%\n",
-      temperature_c,
-      humidity_percent);
-  ui_set_sensor(temperature_c, humidity_percent);
-}
-
-bool read_icon(WiFiClient* stream, uint8_t* buffer, size_t buffer_size, size_t* bytes_read) {
-  *bytes_read = 0;
-  const uint32_t started_at = millis();
-
-  while (millis() - started_at < 5000 &&
-         *bytes_read < buffer_size &&
-         (stream->connected() || stream->available())) {
-    const size_t available = stream->available();
-    if (available == 0) {
-      delay(1);
-      continue;
-    }
-
-    const size_t remaining = buffer_size - *bytes_read;
-    const size_t chunk_size = available < remaining ? available : remaining;
-    const size_t read_count =
-        stream->readBytes(buffer + *bytes_read, chunk_size);
-    *bytes_read += read_count;
-
-    if (read_count == 0) {
-      break;
-    }
-  }
-
-  return *bytes_read > 0 && *bytes_read < buffer_size;
-}
-
-bool fetch_icon(
-    const String& icon_url,
-    uint8_t* icon_buffer,
-    size_t* icon_size) {
-  Serial.printf("[Weather] Icon URL: %s\n", icon_url.c_str());
-  WiFiClientSecure secure_client;
-  secure_client.setInsecure();
-  HTTPClient https;
-  if (https.begin(secure_client, icon_url)) {
-    https.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
-    https.setConnectTimeout(5000);
-    https.setTimeout(5000);
-
-    const int status_code = https.GET();
-    Serial.printf(
-        "[Weather] HTTPS icon response: %d (%s)\n",
-        status_code,
-        https.errorToString(status_code).c_str());
-    if (status_code == HTTP_CODE_OK) {
-      WiFiClient* stream = https.getStreamPtr();
-      const bool success =
-          read_icon(stream, icon_buffer, kMaxIconBytes, icon_size);
-      https.end();
-      return success;
-    }
-    https.end();
+  if (use_24_hour) {
+    if (hour < 10)
+      return String("0") + String(hour);
+    else
+      return String(hour);
   } else {
-    Serial.println("[Weather] HTTPS icon request setup failed");
-  }
+    if(hour == 0)   return String("12") + strings->am;
+    if(hour == 12)  return String(strings->noon);
 
-  String http_url = icon_url;
-  http_url.replace("https:", "http:");
-  WiFiClient plain_client;
-  HTTPClient http;
-  if (!http.begin(plain_client, http_url)) {
-    Serial.println("[Weather] HTTP icon request setup failed");
-    return false;
-  }
-  http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
-  http.setConnectTimeout(5000);
-  http.setTimeout(5000);
+    bool isMorning = (hour < 12);
+    String suffix = isMorning ? strings->am : strings->pm;
 
-  const int status_code = http.GET();
-  Serial.printf(
-      "[Weather] HTTP icon response: %d (%s)\n",
-      status_code,
-      http.errorToString(status_code).c_str());
-  if (status_code != HTTP_CODE_OK) {
-    http.end();
-    return false;
-  }
+    int displayHour = hour % 12;
 
-  WiFiClient* stream = http.getStreamPtr();
-  const bool success = read_icon(stream, icon_buffer, kMaxIconBytes, icon_size);
-  http.end();
-  return success;
+    return String(displayHour) + suffix;
+  }
 }
 
-bool fetch_weather() {
-  WiFiClientSecure client;
-  client.setInsecure();
-
-  String url = "https://api.weatherapi.com/v1/current.json?key=";
-  url += WEATHER_API_KEY;
-  String location = WEATHER_LOCATION;
-  location.replace(" ", "%20");
-  url += "&q=";
-  url += location;
-  url += "&aqi=no";
-  Serial.printf(
-      "[Weather] GET current weather for %s\n",
-      WEATHER_LOCATION);
-
-  HTTPClient http;
-  if (!http.begin(client, url)) {
-    Serial.println("[Weather] Request setup failed");
-    return false;
+String urlencode(const String &str) {
+  String encoded = "";
+  char buf[5];
+  for (size_t i = 0; i < str.length(); i++) {
+    char c = str.charAt(i);
+    // Unreserved characters according to RFC 3986
+    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') {
+      encoded += c;
+    } else {
+      // Percent-encode others
+      sprintf(buf, "%%%02X", (unsigned char)c);
+      encoded += buf;
+    }
   }
-  
-  http.setConnectTimeout(5000);
-  http.setTimeout(5000);
-
-  const int status_code = http.GET();
-  Serial.printf("[Weather] Weather response: %d\n", status_code);
-  if (status_code != HTTP_CODE_OK) {
-    http.end();
-    return false;
-  }
-
-  DynamicJsonDocument document(4096);
-  const String response_body = http.getString();
-  Serial.println("[Weather] API response:");
-  Serial.println(response_body);
-  const DeserializationError parse_error =
-      deserializeJson(document, response_body);
-  http.end();
-  if (parse_error) {
-    Serial.printf(
-        "[Weather] JSON parse failed: %s\n",
-        parse_error.c_str());
-    return false;
-  }
-
-  const JsonVariant temperature_value = document["current"]["temp_c"];
-  if (temperature_value.isNull()) {
-    Serial.println("[Weather] Response has no valid current.temp_c");
-    return false;
-  }
-
-  const float temperature = temperature_value.as<float>();
-  Serial.printf("[Weather] Parsed temp_c: %.2f C\n", temperature);
-  const char* condition =
-      document["current"]["condition"]["text"].as<const char*>();
-  const char* icon_path =
-      document["current"]["condition"]["icon"].as<const char*>();
-  if (isnan(temperature) || condition == nullptr || icon_path == nullptr) {
-    Serial.println("[Weather] Response missing weather fields");
-    return false;
-  }
-
-  String icon_url = "https:";
-  icon_url += icon_path;
-  uint8_t* icon_buffer =
-      static_cast<uint8_t*>(malloc(kMaxIconBytes));
-  if (icon_buffer == nullptr) {
-    ui_set_weather(temperature, condition, nullptr, 0);
-    return true;
-  }
-
-  size_t icon_size = 0;
-  if (!fetch_icon(icon_url, icon_buffer, &icon_size)) {
-    Serial.println("[Weather] Icon download failed");
-    free(icon_buffer);
-    ui_set_weather(temperature, condition, nullptr, 0);
-    return true;
-  }
-
-  ui_set_weather(temperature, condition, icon_buffer, icon_size);
-  Serial.printf(
-      "[Weather] Updated: %.1f C, %s\n",
-      temperature,
-      condition);
-  free(icon_buffer);
-  return true;
+  return encoded;
 }
 
-}  // namespace
+void update_clock(lv_timer_t *timer) {
+  struct tm timeinfo;
 
-void weather_init() {
-  pinMode(kDht12SdaPin, INPUT_PULLUP);
-  pinMode(kDht12SclPin, INPUT_PULLUP);
-  Wire.begin(kDht12SdaPin, kDht12SclPin);
-  Wire.setClock(100000);
-  Serial.printf(
-      "[DHT12] I2C initialized SDA=%u SCL=%u, levels=%d/%d\n",
-      kDht12SdaPin,
-      kDht12SclPin,
-      digitalRead(kDht12SdaPin),
-      digitalRead(kDht12SclPin));
-  ui_set_sensor_status("DHT12 waiting...");
-  WiFi.mode(WIFI_STA);
-  WiFi.setAutoReconnect(true);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  Serial.printf("[Weather] Connecting to Wi-Fi SSID: %s\n", WIFI_SSID);
-  next_wifi_attempt = millis() + kWifiRetryIntervalMs;
-  next_weather_refresh = millis() + 5000;
-  next_dht12_refresh = millis() + 1000;
-  ui_set_weather_status("Connecting...");
-  ui_set_system_status("Connecting Wi-Fi");
+  check_for_night_mode();
+
+  if (!getLocalTime(&timeinfo)) return;
+
+  const LocalizedStrings* strings = get_strings(current_language);
+  char buf[16];
+  if (use_24_hour) {
+    snprintf(buf, sizeof(buf), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+  } else {
+    int hour = timeinfo.tm_hour % 12;
+    if(hour == 0) hour = 12;
+    const char *ampm = (timeinfo.tm_hour < 12) ? strings->am : strings->pm;
+    snprintf(buf, sizeof(buf), "%d:%02d%s", hour, timeinfo.tm_min, ampm);
+  }
+  lv_label_set_text(lbl_clock, buf);
 }
 
-void weather_update() {
-  update_dht12();
-
+void fetch_and_update_weather() {
   if (WiFi.status() != WL_CONNECTED) {
-    ui_set_system_status("Wi-Fi disconnected");
-    if (millis() < next_wifi_attempt) {
+    Serial.println("WiFi no longer connected. Attempting to reconnect...");
+    WiFi.disconnect();
+    WiFiManager wm;
+    wm.autoConnect(DEFAULT_CAPTIVE_SSID);
+    delay(1000);
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("WiFi connection still unavailable.");
       return;
     }
-
-    next_wifi_attempt = millis() + kWifiRetryIntervalMs;
-    WiFi.disconnect();
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    ui_set_weather_status("Connecting...");
-    ui_set_system_status("Connecting Wi-Fi");
-    return;
+    Serial.println("WiFi connection reestablished.");
   }
 
-  if (millis() < next_weather_refresh) {
-    return;
-  }
 
-  next_weather_refresh = millis() + kWeatherRefreshIntervalMs;
-  ui_set_system_status("Updating weather");
-  if (!fetch_weather()) {
-    ui_set_weather_status("Weather unavailable");
-    ui_set_system_status("Weather API error");
-    return;
+  String url = String("http://api.open-meteo.com/v1/forecast?latitude=")
+               + latitude + "&longitude=" + longitude
+               + "&current=temperature_2m,apparent_temperature,is_day,weather_code"
+               + "&daily=temperature_2m_min,temperature_2m_max,weather_code"
+               + "&hourly=temperature_2m,precipitation_probability,is_day,weather_code"
+               + "&forecast_hours=7"
+               + "&timezone=auto";
+
+  HTTPClient http;
+  http.begin(url);
+
+  if (http.GET() == HTTP_CODE_OK) {
+    Serial.println("Updated weather from open-meteo: " + url);
+
+    String payload = http.getString();
+    DynamicJsonDocument doc(32 * 1024);
+
+    if (deserializeJson(doc, payload) == DeserializationError::Ok) {
+      float t_now = doc["current"]["temperature_2m"].as<float>();
+      float t_ap = doc["current"]["apparent_temperature"].as<float>();
+      int code_now = doc["current"]["weather_code"].as<int>();
+      int is_day = doc["current"]["is_day"].as<int>();
+
+      if (use_fahrenheit) {
+        t_now = t_now * 9.0 / 5.0 + 32.0;
+        t_ap = t_ap * 9.0 / 5.0 + 32.0;
+      }
+      const LocalizedStrings* strings = get_strings(current_language);
+
+      int utc_offset_seconds = doc["utc_offset_seconds"].as<int>();
+      configTime(utc_offset_seconds, 0, "pool.ntp.org", "time.nist.gov");
+      Serial.print("Updating time from NTP with UTC offset: ");
+      Serial.println(utc_offset_seconds);
+
+      char unit = use_fahrenheit ? 'F' : 'C';
+      lv_label_set_text_fmt(lbl_today_temp, "%.0f°%c", t_now, unit);
+      lv_label_set_text_fmt(lbl_today_feels_like, "%s %.0f°%c", strings->feels_like_temp, t_ap, unit);
+      lv_img_set_src(img_today_icon, choose_image(code_now, is_day));
+
+      JsonArray times = doc["daily"]["time"].as<JsonArray>();
+      JsonArray tmin = doc["daily"]["temperature_2m_min"].as<JsonArray>();
+      JsonArray tmax = doc["daily"]["temperature_2m_max"].as<JsonArray>();
+      JsonArray weather_codes = doc["daily"]["weather_code"].as<JsonArray>();
+
+      for (int i = 0; i < 7; i++) {
+        const char *date = times[i];
+        int year = atoi(date + 0);
+        int mon = atoi(date + 5);
+        int dayd = atoi(date + 8);
+        int dow = day_of_week(year, mon, dayd);
+        const char *dayStr = (i == 0 && current_language != LANG_FR) ? strings->today : strings->weekdays[dow];
+
+        float mn = tmin[i].as<float>();
+        float mx = tmax[i].as<float>();
+        if (use_fahrenheit) {
+          mn = mn * 9.0 / 5.0 + 32.0;
+          mx = mx * 9.0 / 5.0 + 32.0;
+        }
+
+        lv_label_set_text_fmt(lbl_daily_day[i], "%s", dayStr);
+        lv_label_set_text_fmt(lbl_daily_high[i], "%.0f°%c", mx, unit);
+        lv_label_set_text_fmt(lbl_daily_low[i], "%.0f°%c", mn, unit);
+        lv_img_set_src(img_daily[i], choose_icon(weather_codes[i].as<int>(), (i == 0) ? is_day : 1));
+      }
+
+      JsonArray hours = doc["hourly"]["time"].as<JsonArray>();
+      JsonArray hourly_temps = doc["hourly"]["temperature_2m"].as<JsonArray>();
+      JsonArray precipitation_probabilities = doc["hourly"]["precipitation_probability"].as<JsonArray>();
+      JsonArray hourly_weather_codes = doc["hourly"]["weather_code"].as<JsonArray>();
+      JsonArray hourly_is_day = doc["hourly"]["is_day"].as<JsonArray>();
+
+      for (int i = 0; i < 7; i++) {
+        const char *date = hours[i];  // "YYYY-MM-DD"
+        int hour = atoi(date + 11);
+        int minute = atoi(date + 14);
+        String hour_name = hour_of_day(hour);
+
+        float precipitation_probability = precipitation_probabilities[i].as<float>();
+        float temp = hourly_temps[i].as<float>();
+        if (use_fahrenheit) {
+          temp = temp * 9.0 / 5.0 + 32.0;
+        }
+
+        if (i == 0 && current_language != LANG_FR) {
+          lv_label_set_text(lbl_hourly[i], strings->now);
+        } else {
+          lv_label_set_text(lbl_hourly[i], hour_name.c_str());
+        }
+        lv_label_set_text_fmt(lbl_precipitation_probability[i], "%.0f%%", precipitation_probability);
+        lv_label_set_text_fmt(lbl_hourly_temp[i], "%.0f°%c", temp, unit);
+        lv_img_set_src(img_hourly[i], choose_icon(hourly_weather_codes[i].as<int>(), hourly_is_day[i].as<int>()));
+      }
+
+
+    } else {
+      Serial.println("JSON parse failed on result from " + url);
+    }
+  } else {
+    Serial.println("HTTP GET failed at " + url);
   }
-  ui_set_system_status("Weather online");
+  http.end();
+}
+
+const lv_img_dsc_t* choose_image(int code, int is_day) {
+  switch (code) {
+    // Clear sky
+    case  0:
+      return is_day
+        ? &image_sunny
+        : &image_clear_night;
+
+    // Mainly clear
+    case  1:
+      return is_day
+        ? &image_mostly_sunny
+        : &image_mostly_clear_night;
+
+    // Partly cloudy
+    case  2:
+      return is_day
+        ? &image_partly_cloudy
+        : &image_partly_cloudy_night;
+
+    // Overcast
+    case  3:
+      return &image_cloudy;
+
+    // Fog / mist
+    case 45:
+    case 48:
+      return &image_haze_fog_dust_smoke;
+
+    // Drizzle (light → dense)
+    case 51:
+    case 53:
+    case 55:
+      return &image_drizzle;
+
+    // Freezing drizzle
+    case 56:
+    case 57:
+      return &image_sleet_hail;
+
+    // Rain: slight showers
+    case 61:
+      return is_day
+        ? &image_scattered_showers_day
+        : &image_scattered_showers_night;
+
+    // Rain: moderate
+    case 63:
+      return &image_showers_rain;
+
+    // Rain: heavy
+    case 65:
+      return &image_heavy_rain;
+
+    // Freezing rain
+    case 66:
+    case 67:
+      return &image_wintry_mix_rain_snow;
+
+    // Snow fall (light, moderate, heavy) & snow showers (light)
+    case 71:
+    case 73:
+    case 75:
+    case 85:
+      return &image_snow_showers_snow;
+
+    // Snow grains
+    case 77:
+      return &image_flurries;
+
+    // Rain showers (slight → moderate)
+    case 80:
+    case 81:
+      return is_day
+        ? &image_scattered_showers_day
+        : &image_scattered_showers_night;
+
+    // Rain showers: violent
+    case 82:
+      return &image_heavy_rain;
+
+    // Heavy snow showers
+    case 86:
+      return &image_heavy_snow;
+
+    // Thunderstorm (light)
+    case 95:
+      return is_day
+        ? &image_isolated_scattered_tstorms_day
+        : &image_isolated_scattered_tstorms_night;
+
+    // Thunderstorm with hail
+    case 96:
+    case 99:
+      return &image_strong_tstorms;
+
+    // Fallback for any other code
+    default:
+      return is_day
+        ? &image_mostly_cloudy_day
+        : &image_mostly_cloudy_night;
+  }
+}
+
+const lv_img_dsc_t* choose_icon(int code, int is_day) {
+  switch (code) {
+    // Clear sky
+    case  0:
+      return is_day
+        ? &icon_sunny
+        : &icon_clear_night;
+
+    // Mainly clear
+    case  1:
+      return is_day
+        ? &icon_mostly_sunny
+        : &icon_mostly_clear_night;
+
+    // Partly cloudy
+    case  2:
+      return is_day
+        ? &icon_partly_cloudy
+        : &icon_partly_cloudy_night;
+
+    // Overcast
+    case  3:
+      return &icon_cloudy;
+
+    // Fog / mist
+    case 45:
+    case 48:
+      return &icon_haze_fog_dust_smoke;
+
+    // Drizzle (light → dense)
+    case 51:
+    case 53:
+    case 55:
+      return &icon_drizzle;
+
+    // Freezing drizzle
+    case 56:
+    case 57:
+      return &icon_sleet_hail;
+
+    // Rain: slight showers
+    case 61:
+      return is_day
+        ? &icon_scattered_showers_day
+        : &icon_scattered_showers_night;
+
+    // Rain: moderate
+    case 63:
+      return &icon_showers_rain;
+
+    // Rain: heavy
+    case 65:
+      return &icon_heavy_rain;
+
+    // Freezing rain
+    case 66:
+    case 67:
+      return &icon_wintry_mix_rain_snow;
+
+    // Snow fall (light, moderate, heavy) & snow showers (light)
+    case 71:
+    case 73:
+    case 75:
+    case 85:
+      return &icon_snow_showers_snow;
+
+    // Snow grains
+    case 77:
+      return &icon_flurries;
+
+    // Rain showers (slight → moderate)
+    case 80:
+    case 81:
+      return is_day
+        ? &icon_scattered_showers_day
+        : &icon_scattered_showers_night;
+
+    // Rain showers: violent
+    case 82:
+      return &icon_heavy_rain;
+
+    // Heavy snow showers
+    case 86:
+      return &icon_heavy_snow;
+
+    // Thunderstorm (light)
+    case 95:
+      return is_day
+        ? &icon_isolated_scattered_tstorms_day
+        : &icon_isolated_scattered_tstorms_night;
+
+    // Thunderstorm with hail
+    case 96:
+    case 99:
+      return &icon_strong_tstorms;
+
+    // Fallback for any other code
+    default:
+      return is_day
+        ? &icon_mostly_cloudy_day
+        : &icon_mostly_cloudy_night;
+  }
 }

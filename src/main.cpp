@@ -155,6 +155,8 @@ void setup() {
   wm.setAPCallback(apModeCallback);
   wm.autoConnect(DEFAULT_CAPTIVE_SSID);
 
+  init_blynk();
+
   lv_timer_create(update_clock, 1000, NULL);
 
   lv_obj_clean(lv_scr_act());
@@ -178,6 +180,7 @@ void apModeCallback(WiFiManager *mgr) {
 
 void loop() {
   lv_timer_handler();
+  run_blynk();
   static uint32_t last = millis();
 
   static uint32_t last_climate = 0;

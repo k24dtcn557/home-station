@@ -1,5 +1,28 @@
 #include "app.h"
 
+namespace {
+
+void set_temperature_label(lv_obj_t* label, float temperature, char unit) {
+  char text[16];
+  snprintf(text, sizeof(text), "%.0f°%c", temperature, unit);
+  lv_label_set_text(label, text);
+}
+
+void set_feels_like_label(lv_obj_t* label, const char* prefix,
+                          float temperature, char unit) {
+  char text[32];
+  snprintf(text, sizeof(text), "%s %.0f°%c", prefix, temperature, unit);
+  lv_label_set_text(label, text);
+}
+
+void set_percentage_label(lv_obj_t* label, float percentage) {
+  char text[8];
+  snprintf(text, sizeof(text), "%.0f%%", percentage);
+  lv_label_set_text(label, text);
+}
+
+}  // namespace
+
 int day_of_week(int y, int m, int d) {
   static const int t[] = { 0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4 };
   if (m < 3) y -= 1;
@@ -115,8 +138,9 @@ void fetch_and_update_weather() {
       Serial.println(utc_offset_seconds);
 
       char unit = use_fahrenheit ? 'F' : 'C';
-      lv_label_set_text_fmt(lbl_today_temp, "%.0f°%c", t_now, unit);
-      lv_label_set_text_fmt(lbl_today_feels_like, "%s %.0f°%c", strings->feels_like_temp, t_ap, unit);
+      set_temperature_label(lbl_today_temp, t_now, unit);
+      set_feels_like_label(lbl_today_feels_like, strings->feels_like_temp, t_ap,
+                           unit);
       lv_img_set_src(img_today_icon, choose_image(code_now, is_day));
 
       JsonArray times = doc["daily"]["time"].as<JsonArray>();
@@ -140,8 +164,8 @@ void fetch_and_update_weather() {
         }
 
         lv_label_set_text_fmt(lbl_daily_day[i], "%s", dayStr);
-        lv_label_set_text_fmt(lbl_daily_high[i], "%.0f°%c", mx, unit);
-        lv_label_set_text_fmt(lbl_daily_low[i], "%.0f°%c", mn, unit);
+        set_temperature_label(lbl_daily_high[i], mx, unit);
+        set_temperature_label(lbl_daily_low[i], mn, unit);
         lv_img_set_src(img_daily[i], choose_icon(weather_codes[i].as<int>(), (i == 0) ? is_day : 1));
       }
 
@@ -168,8 +192,9 @@ void fetch_and_update_weather() {
         } else {
           lv_label_set_text(lbl_hourly[i], hour_name.c_str());
         }
-        lv_label_set_text_fmt(lbl_precipitation_probability[i], "%.0f%%", precipitation_probability);
-        lv_label_set_text_fmt(lbl_hourly_temp[i], "%.0f°%c", temp, unit);
+        set_percentage_label(lbl_precipitation_probability[i],
+                             precipitation_probability);
+        set_temperature_label(lbl_hourly_temp[i], temp, unit);
         lv_img_set_src(img_hourly[i], choose_icon(hourly_weather_codes[i].as<int>(), hourly_is_day[i].as<int>()));
       }
 

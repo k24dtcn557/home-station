@@ -22,10 +22,11 @@
 #define DHT12_SCL 22
 #define DHT12_ADDRESS 0x5C
 #define DHT12_UPDATE_INTERVAL 5000UL
+#define TEMPERATURE_TOLERANCE -1.0f
 #define LCD_BACKLIGHT_PIN 21
 #define SCREEN_WIDTH 240
 #define SCREEN_HEIGHT 320
-#define DRAW_BUF_SIZE (SCREEN_WIDTH * SCREEN_HEIGHT / 10 * (LV_COLOR_DEPTH / 8))
+#define DRAW_BUF_SIZE (SCREEN_WIDTH * SCREEN_HEIGHT / 20 * (LV_COLOR_DEPTH / 8))
 #define LATITUDE_DEFAULT "51.5074"
 #define LONGITUDE_DEFAULT "-0.1278"
 #define LOCATION_DEFAULT "London"
@@ -33,6 +34,13 @@
 #define UPDATE_INTERVAL 600000UL
 #define NIGHT_MODE_START_HOUR 22
 #define NIGHT_MODE_END_HOUR 6
+
+// Blynk Configuration (replace with your credentials from Blynk.Cloud)
+#define BLYNK_TEMPLATE_ID "TMPL6KHyeoQuM"
+#define BLYNK_TEMPLATE_NAME "Home Station"
+#define BLYNK_AUTH_TOKEN "pYMJE7W3_LdNyHB2704a9CMam85teQiP"
+#define BLYNK_PIN_TEMP V0
+#define BLYNK_PIN_HUM  V1
 
 LV_FONT_DECLARE(lv_font_montserrat_latin_12);
 LV_FONT_DECLARE(lv_font_montserrat_latin_14);
@@ -156,3 +164,8 @@ void check_for_night_mode();
 void handle_temp_screen_wakeup_timeout(lv_timer_t* timer);
 const lv_img_dsc_t* choose_image(int code, int is_day);
 const lv_img_dsc_t* choose_icon(int code, int is_day);
+
+// Blynk functions
+void init_blynk();
+void run_blynk();
+void blynk_send_climate(float temperature, float humidity);

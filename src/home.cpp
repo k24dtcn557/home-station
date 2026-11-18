@@ -180,7 +180,8 @@ void create_ui() {
   lv_obj_set_style_pad_all(navigation_bar, 0, LV_PART_MAIN);
   lv_obj_clear_flag(navigation_bar, LV_OBJ_FLAG_SCROLLABLE);
 
-  const char* navigation_labels[] = {"Home", "Weather", "Settings"};
+  const char* navigation_labels[] = {
+      strings->nav_home, strings->nav_weather, strings->nav_settings};
   for (uint8_t index = 0; index < 3; ++index) {
     lv_obj_t* button = lv_btn_create(navigation_bar);
     lv_obj_set_size(button, SCREEN_WIDTH / 3, 24);

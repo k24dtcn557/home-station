@@ -40,7 +40,7 @@ void touchscreen_read(lv_indev_t *indev, lv_indev_data_t *data) {
     z = p.z;
 
     // Handle touch during dimmed screen
-    if (night_mode_active) {
+    if (night_mode_active || !screen_power) {
       // Temporarily wake the screen for 15 seconds
       analogWrite(LCD_BACKLIGHT_PIN, prefs.getUInt("brightness", 128));
 
@@ -272,24 +272,33 @@ void create_settings_window() {
 
   lv_obj_t *cont = lv_win_get_content(settings_win);
 
+  lv_obj_add_event_cb(settings_win, [](lv_event_t *e){
+    brightness_slider = nullptr;
+  }, LV_EVENT_DELETE, NULL);
+
   // Brightness
   lv_obj_t *lbl_b = lv_label_create(cont);
   lv_label_set_text(lbl_b, strings->brightness);
   lv_obj_set_style_text_font(lbl_b, get_font_12(), LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_align(lbl_b, LV_ALIGN_TOP_LEFT, 0, 5);
-  lv_obj_t *slider = lv_slider_create(cont);
-  lv_slider_set_range(slider, 1, 255);
+  brightness_slider = lv_slider_create(cont);
+  lv_slider_set_range(brightness_slider, 1, 255);
   uint32_t saved_b = prefs.getUInt("brightness", 128);
-  lv_slider_set_value(slider, saved_b, LV_ANIM_OFF);
-  lv_obj_set_width(slider, 100);
-  lv_obj_align_to(slider, lbl_b, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
+  lv_slider_set_value(brightness_slider, saved_b, LV_ANIM_OFF);
+  lv_obj_set_width(brightness_slider, 100);
+  lv_obj_align_to(brightness_slider, lbl_b, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
 
-  lv_obj_add_event_cb(slider, [](lv_event_t *e){
+  lv_obj_add_event_cb(brightness_slider, [](lv_event_t *e){
+    lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t *s = (lv_obj_t*)lv_event_get_target(e);
     uint32_t v = lv_slider_get_value(s);
-    analogWrite(LCD_BACKLIGHT_PIN, v);
-    prefs.putUInt("brightness", v);
-  }, LV_EVENT_VALUE_CHANGED, NULL);
+    if (code == LV_EVENT_VALUE_CHANGED) {
+      analogWrite(LCD_BACKLIGHT_PIN, v);
+      prefs.putUInt("brightness", v);
+    } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+      blynk_send_brightness(v);
+    }
+  }, LV_EVENT_ALL, NULL);
 
   // 'Night mode' switch
   lv_obj_t *lbl_night_mode = lv_label_create(cont);
@@ -354,7 +363,7 @@ void create_settings_window() {
   lv_obj_align_to(lbl_lang, lbl_loc_l, LV_ALIGN_OUT_BOTTOM_LEFT, 0, vertical_element_spacing);
 
   language_dropdown = lv_dropdown_create(cont);
-  lv_dropdown_set_options(language_dropdown, "English\nEspañol\nDeutsch\nFrançais\nTürkçe\nSvenska\nItaliano");
+  lv_dropdown_set_options(language_dropdown, "English\nFrançais\nTieng Viet");
   lv_dropdown_set_selected(language_dropdown, current_language);
   lv_obj_set_width(language_dropdown, 120);
   lv_obj_set_style_text_font(language_dropdown, get_font_12(), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -482,8 +491,47 @@ void activate_night_mode() {
 }
 
 void deactivate_night_mode() {
-  analogWrite(LCD_BACKLIGHT_PIN, prefs.getUInt("brightness", 128));
+  if (screen_power) {
+    analogWrite(LCD_BACKLIGHT_PIN, prefs.getUInt("brightness", 128));
+  }
   night_mode_active = false;
+}
+
+void set_screen_power(bool on) {
+  screen_power = on;
+  if (on) {
+    if (temp_screen_wakeup_timer) {
+      lv_timer_del(temp_screen_wakeup_timer);
+      temp_screen_wakeup_timer = nullptr;
+    }
+    temp_screen_wakeup_active = false;
+    night_mode_active = false;
+    uint32_t brightness = prefs.getUInt("brightness", 128);
+    analogWrite(LCD_BACKLIGHT_PIN, brightness);
+    Serial.println("[Screen] Turned ON");
+  } else {
+    analogWrite(LCD_BACKLIGHT_PIN, 0);
+    Serial.println("[Screen] Turned OFF");
+  }
+}
+
+void set_screen_brightness(uint32_t brightness, bool sync_blynk) {
+  if (brightness < 1) brightness = 1;
+  if (brightness > 255) brightness = 255;
+
+  prefs.putUInt("brightness", brightness);
+
+  if (screen_power) {
+    analogWrite(LCD_BACKLIGHT_PIN, brightness);
+  }
+
+  if (brightness_slider != nullptr) {
+    lv_slider_set_value(brightness_slider, brightness, LV_ANIM_OFF);
+  }
+
+  if (sync_blynk) {
+    blynk_send_brightness(brightness);
+  }
 }
 
 void check_for_night_mode() {
@@ -500,8 +548,11 @@ void handle_temp_screen_wakeup_timeout(lv_timer_t *timer) {
   if (temp_screen_wakeup_active) {
     temp_screen_wakeup_active = false;
 
-    if (night_mode_should_be_active()) {
-      activate_night_mode();
+    if (night_mode_should_be_active() || !screen_power) {
+      analogWrite(LCD_BACKLIGHT_PIN, 0);
+      if (night_mode_should_be_active()) {
+        night_mode_active = true;
+      }
     }
   }
 

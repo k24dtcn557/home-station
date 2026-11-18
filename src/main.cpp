@@ -1,6 +1,6 @@
 #include "app.h"
 
-Language current_language = LANG_EN;
+Language current_language = LANG_VI;
 
 SPIClass touchscreenSPI = SPIClass(VSPI);
 XPT2046_Touchscreen touchscreen(XPT2046_CS, XPT2046_IRQ);
@@ -21,6 +21,7 @@ JsonArray geoResults;
 
 // Screen dimming variables
 bool night_mode_active = false;
+bool screen_power = true;
 bool temp_screen_wakeup_active = false;
 lv_timer_t *temp_screen_wakeup_timer = nullptr;
 
@@ -44,6 +45,7 @@ lv_obj_t *loc_ta;
 lv_obj_t *results_dd;
 lv_obj_t *btn_close_loc;
 lv_obj_t *btn_close_obj;
+lv_obj_t *brightness_slider = nullptr;
 lv_obj_t *kb;
 lv_obj_t *settings_win;
 lv_obj_t *location_win = nullptr;
@@ -147,7 +149,7 @@ void setup() {
   use_night_mode = prefs.getBool("useNightMode", false);
   uint32_t brightness = prefs.getUInt("brightness", 255);
   use_24_hour = prefs.getBool("use24Hour", false);
-  current_language = (Language)prefs.getUInt("language", LANG_EN);
+  current_language = (Language)prefs.getUInt("language", LANG_VI);
   analogWrite(LCD_BACKLIGHT_PIN, brightness);
 
   // Check for Wi-Fi config and request it if not available
@@ -194,6 +196,6 @@ void loop() {
     last = millis();
   }
 
-  lv_tick_inc(5);
-  delay(5);
+  lv_tick_inc(50);
+  delay(50);
 }

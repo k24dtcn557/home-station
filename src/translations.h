@@ -2,7 +2,7 @@
 #define TRANSLATIONS_H
 
 // Language support
-enum Language { LANG_EN = 0, LANG_ES = 1, LANG_DE = 2, LANG_FR = 3, LANG_TR = 4, LANG_SV = 5, LANG_IT = 6 };
+enum Language { LANG_EN = 0, LANG_FR = 1, LANG_VI = 2 };
 
 struct LocalizedStrings {
   const char* temp_placeholder;
@@ -35,6 +35,13 @@ struct LocalizedStrings {
   const char* language_label;
   const char* weekdays[7];
   const char* use_night_mode;
+  const char* nav_home;
+  const char* nav_weather;
+  const char* nav_settings;
+  const char* climate_title;
+  const char* climate_indoor_air;
+  const char* climate_humidity;
+  const char* climate_read_failed;
 };
 
 #define DEFAULT_CAPTIVE_SSID "Aura"
@@ -65,71 +72,9 @@ static const LocalizedStrings strings_en = {
   "reconfigure Wi-Fi credentials.",
   "Language:",
   {"Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat"},
-  "Dim screen at night"
-};
-
-static const LocalizedStrings strings_es = {
-  "--°C", "Sensación", "PRONÓSTICO 7 DÍAS", "PRONÓSTICO POR HORAS",
-  "Hoy", "Ahora", "am", "pm", "Mediodía", "Hora inválida",
-  "Brillo:", "Ubicación:", "Usar °F:", "24h:",
-  "Guardar", "Cancelar", "Cerrar", "Ubicación", "Wi-Fi",
-  "Restablecer", "Cambiar Ubicación", "Configuración Aura",
-  "Ciudad:", "Resultados de Búsqueda", "ej. Madrid",
-  "Configuración Wi-Fi:\n\n"
-  "Conecte su teléfono\n"
-  "o portátil al punto de\n"
-  "acceso Wi-Fi temporal\n"
-  DEFAULT_CAPTIVE_SSID
-  "\n"
-  "para configurar.\n\n"
-  "Si no ve una pantalla\n"
-  "de configuración después\n"
-  "de conectarse, visite\n"
-  "http://192.168.4.1\n"
-  "en su navegador.",
-  "¿Está seguro de que desea\n"
-  "restablecer las credenciales\n"
-  "Wi-Fi?\n\n"
-  "Deberá reconectarse al SSID " DEFAULT_CAPTIVE_SSID
-  " con su teléfono o navegador\n"
-  "para reconfigurar las\n"
-  "credenciales Wi-Fi.",
-  "Idioma:",
-  {"Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"},
-  "Pantalla noche"
-};
-
-static const LocalizedStrings strings_de = {
-  "--°C", "Gefühlt", "7-TAGE VORHERSAGE", "STÜNDLICHE VORHERSAGE",
-  "Heute", "Jetzt", "", "", "Mittag", "Ungültige Stunde",
-  "Helligkeit:", "Standort:", "°F:", "24h:",
-  "Speichern", "Abbrechen", "Schließen", "Standort", "Wi-Fi",
-  "Zurücksetzen", "Standort ändern", "Aura Einstellungen",
-  "Stadt:", "Suchergebnisse", "z.B. Berlin",
-  "Wi-Fi Konfiguration:\n\n"
-  "Verbinden Sie Ihr Telefon\n"
-  "oder Laptop mit dem\n"
-  "temporären Wi-Fi\n"
-  "Zugangspunkt "
-  DEFAULT_CAPTIVE_SSID
-  "\n"
-  "zum Konfigurieren.\n\n"
-  "Wenn Sie keinen\n"
-  "Konfigurationsbildschirm\n"
-  "sehen, besuchen Sie\n"
-  "http://192.168.4.1\n"
-  "in Ihrem Browser.",
-  "Sind Sie sicher, dass Sie\n"
-  "die Wi-Fi Zugangsdaten\n"
-  "zurücksetzen möchten?\n\n"
-  "Sie müssen sich erneut mit\n"
-  "der SSID " DEFAULT_CAPTIVE_SSID
-  " verbinden, um die\n"
-  "Wi-Fi Zugangsdaten\n"
-  "neu zu konfigurieren.",
-  "Sprache:",
-  {"So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"},
-  "Nacht-Dimmen"
+  "Dim screen at night",
+  "Home", "Weather", "Settings",
+  "TEMPERATURE", "Indoor Air", "Humidity", "DHT12 read failed"
 };
 
 static const LocalizedStrings strings_fr = {
@@ -162,111 +107,49 @@ static const LocalizedStrings strings_fr = {
   "les identifiants Wi-Fi.",
   "Langue:",
   {"Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"},
-  "Nuit écran"
+  "Nuit écran",
+  "Accueil", "Météo", "Paramètres",
+  "TEMPÉRATURE", "Air intérieur", "Humidité", "Échec lecture DHT12"
 };
 
-static const LocalizedStrings strings_tr = {
-  "--°C", "Hissedilen", "YEDI GÜNLÜK TAHMIN", "SAATLIK TAHMIN",
-  "Bugün", "Simdi", "öö", "ös", "Öğle", "Geçersiz saat",
-  "Parlaklik:", "Konum:", "°F Kullan:", "24 Saat:",
-  "Kaydet", "İptal", "Kapat", "Konum", "Wi-Fi Sifirla",
-  "Sifirla", "Konumu Değiştir", "Aura Ayarlari",
-  "Şehir:", "Arama Sonuçları", "örn. Londra",
-  "Wi-Fi Yapilandirmasi:\n\n"
-  "Lütfen telefonunuzu veya\n"
-  "bilgisayarinizi geçici Wi-Fi\n"
-  "erişim noktasina bağlayin "
+static const LocalizedStrings strings_vi = {
+  "--°C", "Cam giac", "DU BAO 7 NGAY", "DU BAO THEO GIO",
+  "Hom nay", "Bay gio", "SA", "CH", "Trua", "Gio khong hop le",
+  "Do sang:", "Vi tri:", "Dung °F:", "24h:",
+  "Luu", "Huy", "Dong", "Vi tri", "Dat lai Wi-Fi",
+  "Dat lai", "Doi vi tri", "Cai dat",
+  "Thanh pho:", "Ket qua tim kiem", "vd: Ha Noi",
+  "Cau hinh Wi-Fi:\n\n"
+  "Vui long ket noi dien\n"
+  "thoai hoac laptop toi\n"
+  "diem phat Wi-Fi tam thoi\n "
   DEFAULT_CAPTIVE_SSID
   "\n"
-  "yapilandirmak için.\n\n"
-  "Bağlandiktan sonra bir\n"
-  "yapilandirma ekrani görmezseniz,\n"
-  "web tarayicinizda\n"
-  "http://192.168.4.1 adresine gidin.",
-  "Wi-Fi kimlik bilgilerini sifirlamak\n"
-  "istediğinizden emin misiniz?\n\n"
-  "Wi-Fi kimlik bilgilerini yeniden\n"
-  "yapilandirmak için telefonunuz veya\n"
-  "tarayiciniz ile " DEFAULT_CAPTIVE_SSID
-  " SSID'sine tekrar bağlanmaniz\n"
-  "gerekecek.",
-  "Dil:",
-  {"Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"},
-  "Gece kısık"
-};
-
-static const LocalizedStrings strings_sv = {
-  "--°C", "Känns som", "7-DAGARS PROGNOS", "TIMPROGNOS",
-  "Idag", "Nu", "", "", "Middag", "Ogiltig timme",
-  "Ljusstyrka:", "Plats:", "Använd °F:", "24h:",
-  "Spara", "Avbryt", "Stäng", "Plats", "Aterställ Wi-Fi",
-  "Aterställ", "Andra plats", "Aura-inställningar",
-  "Stad:", "Sökresultat", "t.ex. Stockholm",
-  "Wi-Fi-konfiguration:\n\n"
-  "Anslut din telefon\n"
-  "eller laptop till den\n"
-  "tillfälliga Wi-Fi-\n"
-  "atkomstpunkten "
-  DEFAULT_CAPTIVE_SSID
-  "\n"
-  "för att konfigurera.\n\n"
-  "Om du inte ser en\n"
-  "konfigurationsskärm\n"
-  "efter anslutning, besök\n"
+  "de cau hinh.\n\n"
+  "Neu khong thay man hinh\n"
+  "cau hinh xuat hien,\n"
+  "truy cap dia chi\n"
   "http://192.168.4.1\n"
-  "i din webbläsare.",
-  "Ar du säker pa att du vill\n"
-  "aterställa Wi-Fi-\n"
-  "autentiseringsuppgifter?\n\n"
-  "Du maste ateransluta till\n"
+  "tren trinh duyet web.",
+  "Ban co chac chan muon\n"
+  "dat lai thong tin Wi-Fi?\n\n"
+  "Ban se can ket noi lai\n"
   "SSID " DEFAULT_CAPTIVE_SSID
-  " med din telefon eller\n"
-  "webbläsare för att\n"
-  "omkonfigurera Wi-Fi-\n"
-  "autentiseringsuppgifter.",
-  "Sprak:",
-  {"Sön", "Man", "Tis", "Ons", "Tor", "Fre", "Lör"},
-  "Nattdämpning"
-};
-
-static const LocalizedStrings strings_it = {
-  "--°C", "Percepita", "PREVISIONI A 7 GIORNI", "PREVISIONI ORARIE",
-  "Oggi", "Ora", "am", "pm", "Mezzog.", "Ora non valida",
-  "Luminosità:", "Posizione:", "Utilizzo °F:", "24hr:",
-  "Salva", "Cancellare", "Close", "Posizione", "Resetta Wi-Fi",
-  "Reset", "Cambia posizione", "Impostazioni aura",
-  "Città:", "Risultati di ricerca", "e.s. Londra",
-  "Configurazione Wi-Fi:\n\n"
-  "Per favore collega il tuo\n"
-  "smartphone o laptop\n"
-  "al Wi-Fi temporaneo\n "
-  DEFAULT_CAPTIVE_SSID
-  "\n"
-  "per configurare la rete.\n\n"
-  "Se non vedi la \n"
-  "Schermata di configurazione \n"
-  "dopo il collegamento,\n"
-  "visita http://192.168.4.1\n"
-  "sul tuo web browser.",
-  "Sei sicuro di voler ripristinare "
-  "le credenzili Wi-Fi ?\n\n"
-  "Dovrai riconnetterti al WiFi con SSID " DEFAULT_CAPTIVE_SSID
-  "con il tuo telefono o browser a "
-  "riconfigurare le credenziali Wi-Fi.",
-  "Lingua:",
-  {"Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"},
-  "Schermo notte"
+  " bang dien thoai hoac\n"
+  "trinh duyet de cau hinh lai.",
+  "Ngon ngu:",
+  {"CN", "T2", "T3", "T4", "T5", "T6", "T7"},
+  "Giam sang ban dem",
+  "Trang chu", "Thoi tiet", "Cai dat",
+  "NHIET DO", "Khong Khi Trong Nha", "Do Am", "Loi doc DHT12"
 };
 
 static const LocalizedStrings* get_strings(Language current_language) {
   switch (current_language) {
-    case LANG_ES: return &strings_es;
-    case LANG_DE: return &strings_de;
+    case LANG_EN: return &strings_en;
     case LANG_FR: return &strings_fr;
-    case LANG_TR: return &strings_tr;
-    case LANG_SV: return &strings_sv;
-    case LANG_IT: return &strings_it;
-    default: return &strings_en;
+    case LANG_VI: return &strings_vi;
+    default: return &strings_vi;
   }
 }
 

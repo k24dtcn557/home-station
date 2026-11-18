@@ -41,6 +41,8 @@
 #define BLYNK_AUTH_TOKEN "pYMJE7W3_LdNyHB2704a9CMam85teQiP"
 #define BLYNK_PIN_TEMP V0
 #define BLYNK_PIN_HUM  V1
+#define BLYNK_PIN_SCREEN V2
+#define BLYNK_PIN_BRIGHTNESS V3
 
 LV_FONT_DECLARE(lv_font_montserrat_latin_12);
 LV_FONT_DECLARE(lv_font_montserrat_latin_14);
@@ -100,6 +102,7 @@ extern char dd_opts[512];
 extern DynamicJsonDocument geoDoc;
 extern JsonArray geoResults;
 extern bool night_mode_active;
+extern bool screen_power;
 extern bool temp_screen_wakeup_active;
 extern lv_timer_t* temp_screen_wakeup_timer;
 extern lv_obj_t* lbl_today_temp;
@@ -121,6 +124,7 @@ extern lv_obj_t* loc_ta;
 extern lv_obj_t* results_dd;
 extern lv_obj_t* btn_close_loc;
 extern lv_obj_t* btn_close_obj;
+extern lv_obj_t* brightness_slider;
 extern lv_obj_t* kb;
 extern lv_obj_t* settings_win;
 extern lv_obj_t* location_win;
@@ -162,6 +166,8 @@ void activate_night_mode();
 void deactivate_night_mode();
 void check_for_night_mode();
 void handle_temp_screen_wakeup_timeout(lv_timer_t* timer);
+void set_screen_power(bool on);
+void set_screen_brightness(uint32_t brightness, bool sync_blynk = false);
 const lv_img_dsc_t* choose_image(int code, int is_day);
 const lv_img_dsc_t* choose_icon(int code, int is_day);
 
@@ -169,3 +175,5 @@ const lv_img_dsc_t* choose_icon(int code, int is_day);
 void init_blynk();
 void run_blynk();
 void blynk_send_climate(float temperature, float humidity);
+void blynk_send_screen_power(bool on);
+void blynk_send_brightness(uint32_t brightness);

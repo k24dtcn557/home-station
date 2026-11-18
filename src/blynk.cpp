@@ -7,30 +7,17 @@ static unsigned long last_alert_time = 0;
 const unsigned long ALERT_COOLDOWN = 1 * 60 * 1000UL; // Send alert every 1 minute
 
 void init_blynk() {
-  if (strcmp(BLYNK_AUTH_TOKEN, "YourAuthTokenHere") == 0 || strlen(BLYNK_AUTH_TOKEN) == 0) {
-    Serial.println("[Blynk] Auth token is not configured. Skipping Blynk setup.");
-    return;
-  }
-
   Serial.println("[Blynk] Initializing Blynk...");
   Blynk.config(BLYNK_AUTH_TOKEN);
 }
 
 void run_blynk() {
-  if (strcmp(BLYNK_AUTH_TOKEN, "YourAuthTokenHere") == 0 || strlen(BLYNK_AUTH_TOKEN) == 0) {
-    return;
-  }
-
   if (WiFi.status() == WL_CONNECTED) {
     Blynk.run();
   }
 }
 
 void blynk_send_climate(float temperature, float humidity) {
-  if (strcmp(BLYNK_AUTH_TOKEN, "YourAuthTokenHere") == 0 || strlen(BLYNK_AUTH_TOKEN) == 0) {
-    return;
-  }
-
   if (Blynk.connected()) {
     float temp_to_send = use_fahrenheit ? (temperature * 1.8f + 32.0f) : temperature;
     Blynk.virtualWrite(BLYNK_PIN_TEMP, temp_to_send);
@@ -46,20 +33,12 @@ void blynk_send_climate(float temperature, float humidity) {
 }
 
 void blynk_send_screen_power(bool on) {
-  if (strcmp(BLYNK_AUTH_TOKEN, "YourAuthTokenHere") == 0 || strlen(BLYNK_AUTH_TOKEN) == 0) {
-    return;
-  }
-
   if (Blynk.connected()) {
     Blynk.virtualWrite(BLYNK_PIN_SCREEN, on ? 1 : 0);
   }
 }
 
 void blynk_send_brightness(uint32_t brightness) {
-  if (strcmp(BLYNK_AUTH_TOKEN, "YourAuthTokenHere") == 0 || strlen(BLYNK_AUTH_TOKEN) == 0) {
-    return;
-  }
-
   if (Blynk.connected()) {
     Blynk.virtualWrite(BLYNK_PIN_BRIGHTNESS, brightness);
     Serial.printf("[Blynk] Synced brightness to Blynk: %u\n", brightness);
